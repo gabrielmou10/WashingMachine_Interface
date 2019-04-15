@@ -243,12 +243,9 @@ int main(void)
 	/* Initialize stdio on USART */
 	stdio_serial_init(USART_SERIAL_EXAMPLE, &usart_serial_options);
 
-	printf("\n\rmaXTouch data USART transmitter\n\r");
 		
 
 	while (1) {
-		/* Check for any pending messages and run message handler if any
-		 * message is found in the queue */
 		ili9488_draw_line(uint32_t 160, uint32_t 0,
 		uint32_t 164, uint32_t 320)
 			
