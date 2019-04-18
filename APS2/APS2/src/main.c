@@ -88,10 +88,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <maquina1.h>
 #include "conf_board.h"
 #include "conf_example.h"
 #include "conf_uart_serial.h"
-
 #define MAX_ENTRIES        3
 #define STRING_LENGTH     70
 
@@ -115,6 +115,43 @@ typedef struct {
 #include "icones/valve.h"
 #include "icones/gear.h"
 #include "icones/next.h"	
+
+
+t_ciclo *initMenuOrder() {
+
+	c_rapido.previous = &c_enxague;
+
+	c_rapido.next = &c_diario;
+
+
+
+	c_diario.previous = &c_rapido;
+
+	c_diario.next = &c_pesado;
+
+
+
+	c_pesado.previous = &c_diario;
+
+	c_pesado.next = &c_enxague;
+
+
+
+	c_enxague.previous = &c_pesado;
+
+	c_enxague.next = &c_centrifuga;
+
+
+
+	c_centrifuga.previous = &c_enxague;
+
+	c_centrifuga.next = &c_rapido;
+
+
+
+	return(&c_diario);
+
+}
 	
 static void configure_lcd(void){
 	/* Initialize display parameter */
@@ -225,17 +262,32 @@ void draw_screen(void) {
 	ili9488_draw_filled_rectangle(0, 0, ILI9488_LCD_WIDTH-1, ILI9488_LCD_HEIGHT-1);
 }
 
+uint32_t convert_axis_system_x(uint32_t touch_y) {
+	// entrada: 4096 - 0 (sistema de coordenadas atual)
+	// saida: 0 - 320
+	return ILI9488_LCD_WIDTH - ILI9488_LCD_WIDTH*touch_y/4096;
+}
+
+uint32_t convert_axis_system_y(uint32_t touch_x) {
+	// entrada: 0 - 4096 (sistema de coordenadas atual)
+	// saida: 0 - 320
+	return ILI9488_LCD_HEIGHT*touch_x/4096;
+}
 void draw_lines(void){
 	ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
 	ili9488_draw_filled_rectangle(0,160,320,165);
 	ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
-	ili9488_draw_filled_rectangle(0,320,320,325);	
+	ili9488_draw_filled_rectangle(0,320,320,325);
 }
 
-void draw_strings(void){
-	ili9488_draw_string(120, 10, "TIPO DE LAVAGEM");
-	ili9488_draw_string(200, 330, "HEAVY");
-	ili9488_draw_string(200, 410, "BUBBLE");
+void draw_strings(t_ciclo *primeiroC){
+	primeiroC = c_rapido.next;
+	ili9488_draw_string(120, 10, primeiroC ->nome);
+	ili9488_draw_string(10,180, primeiroC ->centrifugacaoRPM);
+	ili9488_draw_string(170,180, primeiroC ->enxagueQnt);
+	ili9488_draw_string(300,10, primeiroC ->centrifugacaoTempo);
+	ili9488_draw_string(200, 330, primeiroC ->heavy);
+	ili9488_draw_string(200, 410, primeiroC ->bubblesOn);
 }
 
 
@@ -243,26 +295,26 @@ void draw_icons(void){
 	ili9488_draw_pixmap(10,10,powerbutton.width, powerbutton.width, powerbutton.data);
 	ili9488_draw_pixmap(170,170,valve.width, valve.width, valve.data);
 	ili9488_draw_pixmap(10,170,gear.width, gear.width, gear.data);
-	ili9488_draw_pixmap(170,30,next.width,next.width,next.data);	
+	ili9488_draw_pixmap(170,30,next.width,next.width,next.data);
 }
 
-void draw_button1(uint32_t clicked) {
+void draw_button_trava(uint32_t clicked) {
 	static uint32_t last_state = 255; // undefined
 	if(clicked == last_state) return;
-		
+	
 	ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
 	ili9488_draw_filled_rectangle(10,120,110,150);
 	if(clicked) {
 		ili9488_set_foreground_color(COLOR_CONVERT(COLOR_TOMATO));
 		ili9488_draw_filled_rectangle(10,120,60,150);
-	} else {
+		} else {
 		ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GREEN));
 		ili9488_draw_filled_rectangle(60,120,110,150);
 	}
 	last_state = clicked;
 }
 
-void draw_button2(uint32_t clicked) {
+void draw_button_isDone(uint32_t clicked) {
 	static uint32_t last_state = 255; // undefined
 	if(clicked == last_state) return;
 	
@@ -278,31 +330,35 @@ void draw_button2(uint32_t clicked) {
 	last_state = clicked;
 }
 
-uint32_t convert_axis_system_x(uint32_t touch_y) {
-	// entrada: 4096 - 0 (sistema de coordenadas atual)
-	// saida: 0 - 320
-	return ILI9488_LCD_WIDTH - ILI9488_LCD_WIDTH*touch_y/4096;
-}
 
-uint32_t convert_axis_system_y(uint32_t touch_x) {
-	// entrada: 0 - 4096 (sistema de coordenadas atual)
-	// saida: 0 - 320
-	return ILI9488_LCD_HEIGHT*touch_x/4096;
-}
+typedef struct{
+	void (*call_back)(int);
+	uint32_t axe_x;
+	uint32_t axe_y;
+	uint32_t width;
+	uint32_t height;
+	ili9488_color_t *imagens_icons;
+	} button ;
+
+void callback_power(int i){}
+void callback_next(int i){}
+void callback_lock(int i){}
+void callback_time(int i){}
+
 
 void update_screen(uint32_t tx, uint32_t ty) {
 	if(ty >= 0  && ty <= 180 ) {
 		if(tx >= 0  && tx <= 90) {
-			draw_button1(1);
+			draw_button_trava(1);
 			} else if(tx > 90 && tx < 180 ) {
-			draw_button1(0);
+			draw_button_trava(0);
 		}
 	}
 	if(ty >= 440  && ty <= 480 ) {
 		if(tx >= 0  && tx <= 90) {
-			draw_button2(1);
+			draw_button_isDone(1);
 			} else if(tx > 90 && tx < 180 ) {
-			draw_button2(0);
+			draw_button_isDone(0);
 		}
 	}		
 }
@@ -366,10 +422,10 @@ int main(void)
 	configure_lcd();
 	draw_screen();
 	draw_lines();
-	draw_button1(1);
-	draw_button2(1);
+	draw_button_isDone(1);
+	draw_button_trava(1);
 	draw_icons();
-	draw_strings();
+	//draw_strings(t_ciclo);
 	
 	/* Initialize the mXT touch device */
 	mxt_init(&device);
@@ -378,7 +434,14 @@ int main(void)
 	stdio_serial_init(USART_SERIAL_EXAMPLE, &usart_serial_options);
 
 	printf("\n\rmaXTouch data USART transmitter\n\r");
-		
+	
+	t_ciclo *p_prim = initMenuOrder();
+	
+	
+     button power_button = {.call_back=callback_power,.axe_x=10,.axe_y=10, .width=powerbutton.width,.height=powerbutton.height, .imagens_icons=powerbutton.data};
+	 button next_button  = {.call_back=callback_next,.axe_x=170,.axe_y=30,.width=next.width,.height=next.height,.imagens_icons = next.data};
+	 button safety_lock = {.call_back=callback_lock,.axe_x=10,.axe_y=170,.width=100,.height=30,.imagens_icons=NULL};
+	 button time_IsDone = {.call_back=callback_time,.axe_x=10,.axe_y=440,.width=100,.height=30,.imagens_icons=NULL};
 
 	while (true) {
 		/* Check for any pending messages and run message handler if any

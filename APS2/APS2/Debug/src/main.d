@@ -181,9 +181,9 @@ src/main.d src/main.o: ../src/main.c ../src/asf.h \
  c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-none-eabi\include\string.h \
  c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-none-eabi\include\xlocale.h \
  c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-none-eabi\include\sys\string.h \
- ../src/config/conf_board.h ../src/config/conf_example.h \
- ../src/icones/powerbutton.h ../src/icones/valve.h ../src/icones/gear.h \
- ../src/icones/next.h
+ ../src/maquina1.h ../src/config/conf_board.h \
+ ../src/config/conf_example.h ../src/icones/powerbutton.h \
+ ../src/icones/valve.h ../src/icones/gear.h ../src/icones/next.h
 
 ../src/asf.h:
 
@@ -566,6 +566,8 @@ c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-no
 c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-none-eabi\include\xlocale.h:
 
 c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-none-eabi\include\sys\string.h:
+
+../src/maquina1.h:
 
 ../src/config/conf_board.h:
 
