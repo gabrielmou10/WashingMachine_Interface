@@ -432,8 +432,12 @@ void mxt_handler(struct mxt_device *device,button *buttons, t_ciclo *cicles)
 		sprintf(buf, "Nr: %1d, X:%4d, Y:%4d, Status:0x%2x conv X:%3d Y:%3d\n\r",
 				touch_event.id, touch_event.x, touch_event.y,
 				touch_event.status, conv_x, conv_y);
-				
-		update_screen(conv_x, conv_y,buttons,cicles);
+		
+		int last_status = touch_event.status;
+		if(last_status<60){
+			update_screen(conv_x, conv_y,buttons,cicles);
+		}				
+		
 
 		/* Add the new string to the string buffer */
 		strcat(tx_buf, buf);
