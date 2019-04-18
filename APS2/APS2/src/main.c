@@ -84,6 +84,7 @@
  * Support and FAQ: visit <a href="https://www.microchip.com/support/">Microchip Support</a>
  */
 
+//Includes
 #include <asf.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -92,18 +93,20 @@
 #include "conf_board.h"
 #include "conf_example.h"
 #include "conf_uart_serial.h"
+
+//PA4 - BOTAO LOCK
+#define BUTLOCK_PIO         PIOA
+#define BUTLOCK_PIO_ID        10
+#define BUTLOCK_PIO_IDX       4u
+#define BUTLOCK_PIO_IDX_MASK  (1u << BUTLOCK_PIO_IDX)
+
+//Defines
 #define MAX_ENTRIES        3
 #define STRING_LENGTH     70
-
 #define USART_TX_MAX_LENGTH     0xff
-
 struct ili9488_opt_t g_ili9488_display_opt;
-const uint32_t BUTTON_W = 120;
-const uint32_t BUTTON_H = 150;
-const uint32_t BUTTON_BORDER = 2;
-const uint32_t BUTTON_X = ILI9488_LCD_WIDTH/2;
-const uint32_t BUTTON_Y = ILI9488_LCD_HEIGHT/2;
 
+//Struct Icons
 typedef struct {
 	    const uint8_t *data;
 	    uint16_t width;
@@ -111,47 +114,29 @@ typedef struct {
 	    uint8_t dataSize;
     } tImage;
 
+// Icons
 #include "icones/powerbutton.h"
 #include "icones/valve.h"
 #include "icones/gear.h"
 #include "icones/next.h"	
 
+//Struct Buttons
+typedef struct{
+	void (*call_back)(int);
+	uint32_t axe_x;
+	uint32_t axe_y;
+	uint32_t width;
+	uint32_t height;
+	ili9488_color_t *imagens_icons;
+} button;
 
-t_ciclo *initMenuOrder() {
+// MODO ATUAL
+int count_mode = 0;
 
-	c_rapido.previous = &c_enxague;
-
-	c_rapido.next = &c_diario;
-
-
-
-	c_diario.previous = &c_rapido;
-
-	c_diario.next = &c_pesado;
-
-
-
-	c_pesado.previous = &c_diario;
-
-	c_pesado.next = &c_enxague;
-
-
-
-	c_enxague.previous = &c_pesado;
-
-	c_enxague.next = &c_centrifuga;
-
-
-
-	c_centrifuga.previous = &c_enxague;
-
-	c_centrifuga.next = &c_rapido;
-
-
-
-	return(&c_diario);
-
-}
+// FLAGS
+volatile Bool locked = false;
+volatile Bool started = false;
+volatile Bool nextmode = false;
 	
 static void configure_lcd(void){
 	/* Initialize display parameter */
@@ -163,7 +148,6 @@ static void configure_lcd(void){
 	/* Initialize LCD */
 	ili9488_init(&g_ili9488_display_opt);
 }
-
 /**
  * \brief Set maXTouch configuration
  *
@@ -273,6 +257,36 @@ uint32_t convert_axis_system_y(uint32_t touch_x) {
 	// saida: 0 - 320
 	return ILI9488_LCD_HEIGHT*touch_x/4096;
 }
+
+void draw_mode(t_ciclo cicles[], uint8_t n){
+	
+	char nome[32];
+	char enxagueTempo[15];
+	char enxagueQnt[15];
+	char centrifugacaoRPM[15];
+	char centrifugacaoTempo[15];
+	
+	sprintf(nome,"%s",cicles[n].nome);
+	sprintf(enxagueTempo,"%d minutos",cicles[n].enxagueTempo);
+	sprintf(enxagueQnt,"%d enxagues",cicles[n].enxagueQnt);
+	sprintf(centrifugacaoRPM,"%d RPM",cicles[n].centrifugacaoRPM);
+	sprintf(centrifugacaoTempo,"%d minutos",cicles[n].centrifugacaoTempo);
+	
+	ili9488_draw_string(200, 10, nome);
+	ili9488_draw_string(10,280, enxagueTempo);
+	ili9488_draw_string(170,280, enxagueQnt);
+	ili9488_draw_string(150,135, centrifugacaoTempo);
+	
+	if (cicles[n].heavy == 1){
+		ili9488_draw_string(200, 450, "HEAVY");
+	}
+	
+	if (cicles[n].bubblesOn == 1){
+		ili9488_draw_string(200, 420, "BUBBLES ON");
+	}	
+	
+}
+
 void draw_lines(void){
 	ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
 	ili9488_draw_filled_rectangle(0,160,320,165);
@@ -280,14 +294,8 @@ void draw_lines(void){
 	ili9488_draw_filled_rectangle(0,320,320,325);
 }
 
-void draw_strings(t_ciclo *primeiroC){
-	primeiroC = c_rapido.next;
-	ili9488_draw_string(120, 10, primeiroC ->nome);
-	ili9488_draw_string(10,180, primeiroC ->centrifugacaoRPM);
-	ili9488_draw_string(170,180, primeiroC ->enxagueQnt);
-	ili9488_draw_string(300,10, primeiroC ->centrifugacaoTempo);
-	ili9488_draw_string(200, 330, primeiroC ->heavy);
-	ili9488_draw_string(200, 410, primeiroC ->bubblesOn);
+void draw_strings(){
+	ili9488_draw_string(225, 340,"LOCK");
 }
 
 
@@ -298,21 +306,32 @@ void draw_icons(void){
 	ili9488_draw_pixmap(170,30,next.width,next.width,next.data);
 }
 
-void draw_button_trava(uint32_t clicked) {
+void draw_button_Next(uint32_t clicked){
+	static uint32_t last_state = 255; // undefined
+	if(clicked == last_state) return;
+	if(clicked) {
+		nextmode = 1;
+	}else{}	
+	last_state = clicked;
+}
+
+/*
+void draw_button_lock(uint32_t clicked, button *buttons) {
 	static uint32_t last_state = 255; // undefined
 	if(clicked == last_state) return;
 	
 	ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
-	ili9488_draw_filled_rectangle(10,120,110,150);
+	ili9488_draw_filled_rectangle(buttons[2].axe_x,buttons[2].axe_y,buttons[2].axe_x + buttons[2].width,buttons[2].axe_y + buttons[2].height);
 	if(clicked) {
 		ili9488_set_foreground_color(COLOR_CONVERT(COLOR_TOMATO));
-		ili9488_draw_filled_rectangle(10,120,60,150);
+		ili9488_draw_filled_rectangle(buttons[2].axe_x,buttons[2].axe_y,buttons[2].axe_x + buttons[2].width/2,buttons[2].axe_y + buttons[2].height);
 		} else {
 		ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GREEN));
-		ili9488_draw_filled_rectangle(60,120,110,150);
+		ili9488_draw_filled_rectangle(buttons[2].axe_x,buttons[2].axe_y,buttons[2].axe_x + buttons[2].width,buttons[2].axe_y + buttons[2].height);
 	}
 	last_state = clicked;
 }
+*/
 
 void draw_button_isDone(uint32_t clicked) {
 	static uint32_t last_state = 255; // undefined
@@ -331,39 +350,37 @@ void draw_button_isDone(uint32_t clicked) {
 }
 
 
-typedef struct{
-	void (*call_back)(int);
-	uint32_t axe_x;
-	uint32_t axe_y;
-	uint32_t width;
-	uint32_t height;
-	ili9488_color_t *imagens_icons;
-	} button ;
-
 void callback_power(int i){}
 void callback_next(int i){}
 void callback_lock(int i){}
 void callback_time(int i){}
 
 
-void update_screen(uint32_t tx, uint32_t ty) {
-	if(ty >= 0  && ty <= 180 ) {
-		if(tx >= 0  && tx <= 90) {
-			draw_button_trava(1);
-			} else if(tx > 90 && tx < 180 ) {
-			draw_button_trava(0);
+void update_screen(uint32_t tx, uint32_t ty,button *buttons, t_ciclo *cicles) {
+	
+	/*if(ty >= buttons[2].axe_y  &&  ty <= buttons[2].axe_y + buttons[2].height ) {
+		if(tx >= buttons[2].axe_x  && tx <= buttons[2].axe_x + buttons[2].width/2) {
+			draw_button_lock(1,&buttons);
+			locked = 1;
+			} else if(tx > buttons[2].axe_x  && tx < buttons[2].axe_x + buttons[2].width) {
+			draw_button_lock(0,&buttons);
+			locked = 0;
+		}
+	}*/
+	
+	if(ty >= buttons[1].axe_y  &&  ty <= buttons[1].axe_y + buttons[1].height ) {
+		if(tx >= buttons[1].axe_x  && tx <= buttons[1].axe_x+ buttons[1].width) {
+			if (count_mode < 4){
+				count_mode = count_mode + 1;
+				nextmode=1;
+			}
+			else{count_mode=0;}
 		}
 	}
-	if(ty >= 440  && ty <= 480 ) {
-		if(tx >= 0  && tx <= 90) {
-			draw_button_isDone(1);
-			} else if(tx > 90 && tx < 180 ) {
-			draw_button_isDone(0);
-		}
-	}		
+	
 }
 
-void mxt_handler(struct mxt_device *device)
+void mxt_handler(struct mxt_device *device,button *buttons, t_ciclo *cicles)
 {
 	/* USART tx buffer initialized to 0 */
 	char tx_buf[STRING_LENGTH * MAX_ENTRIES] = {0};
@@ -385,11 +402,12 @@ void mxt_handler(struct mxt_device *device)
 		uint32_t conv_x = convert_axis_system_x(touch_event.y);
 		uint32_t conv_y = convert_axis_system_y(touch_event.x);
 
-		/* Format a new entry in the data string that will be sent over USART */
+		//Format a new entry in the data string that will be sent over USART */
 		sprintf(buf, "Nr: %1d, X:%4d, Y:%4d, Status:0x%2x conv X:%3d Y:%3d\n\r",
 				touch_event.id, touch_event.x, touch_event.y,
 				touch_event.status, conv_x, conv_y);
-		update_screen(conv_x, conv_y);
+				
+		update_screen(conv_x, conv_y,buttons,cicles);
 
 		/* Add the new string to the string buffer */
 		strcat(tx_buf, buf);
@@ -416,16 +434,19 @@ int main(void)
 		.paritytype   = USART_SERIAL_PARITY,
 		.stopbits     = USART_SERIAL_STOP_BIT
 	};
-
+	
+     button power_button = {.call_back=callback_power,.axe_x=10,.axe_y=10, .width=powerbutton.width,.height=powerbutton.height, .imagens_icons=powerbutton.data};
+     button next_button  = {.call_back=callback_next,.axe_x=170,.axe_y=30,.width=next.width,.height=next.height,.imagens_icons = next.data};
+     //button safety_lock = {.call_back=callback_lock,.axe_x=210,.axe_y=370,.width=100,.height=30,.imagens_icons=NULL};
+     //button time_IsDone = {.call_back=callback_time,.axe_x=10,.axe_y=440,.width=100,.height=30,.imagens_icons=NULL};	
+	
+	t_ciclo cicles[] = {c_rapido, c_centrifuga, c_pesado, c_enxague, c_diario};
+	button buttons[]= {power_button,next_button};	
+		
+		
 	sysclk_init(); /* Initialize system clocks */
 	board_init();  /* Initialize board */
 	configure_lcd();
-	draw_screen();
-	draw_lines();
-	draw_button_isDone(1);
-	draw_button_trava(1);
-	draw_icons();
-	//draw_strings(t_ciclo);
 	
 	/* Initialize the mXT touch device */
 	mxt_init(&device);
@@ -435,21 +456,42 @@ int main(void)
 
 	printf("\n\rmaXTouch data USART transmitter\n\r");
 	
-	t_ciclo *p_prim = initMenuOrder();
 	
-	
-     button power_button = {.call_back=callback_power,.axe_x=10,.axe_y=10, .width=powerbutton.width,.height=powerbutton.height, .imagens_icons=powerbutton.data};
-	 button next_button  = {.call_back=callback_next,.axe_x=170,.axe_y=30,.width=next.width,.height=next.height,.imagens_icons = next.data};
-	 button safety_lock = {.call_back=callback_lock,.axe_x=10,.axe_y=170,.width=100,.height=30,.imagens_icons=NULL};
-	 button time_IsDone = {.call_back=callback_time,.axe_x=10,.axe_y=440,.width=100,.height=30,.imagens_icons=NULL};
 
 	while (true) {
 		/* Check for any pending messages and run message handler if any
 		 * message is found in the queue */
-		if (mxt_is_message_pending(&device)) {
-			mxt_handler(&device);
+		int count_lock = 0;
+		if(!(pio_get(BUTLOCK_PIO, PIO_INPUT, BUTLOCK_PIO_IDX_MASK))){
+			count_lock=count_lock+1;
 		}
-			
+		if (count_lock == 3){
+			locked = !locked;
+			count_lock = 0;
+		}
+		
+		if (mxt_is_message_pending(&device)) {
+			mxt_handler(&device,&buttons,&cicles);
+		}
+		if (!started){
+			draw_screen();
+			draw_lines();
+			//draw_button_lock(1,&buttons);
+			draw_strings();
+			draw_icons();
+			draw_mode(cicles,count_mode);
+			started = 1;
+		}
+		if (nextmode){
+			draw_screen();
+			draw_lines();
+			//draw_button_lock(1,&buttons);
+			draw_strings();
+			draw_icons();		
+			draw_mode(cicles,count_mode);
+			nextmode = 0;
+		}	
+
 	}
 
 	return 0;
