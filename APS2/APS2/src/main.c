@@ -100,6 +100,26 @@
 #define BUTLOCK_PIO_IDX       4u
 #define BUTLOCK_PIO_IDX_MASK  (1u << BUTLOCK_PIO_IDX)
 
+void _pio_set(Pio *p_pio, const uint32_t ul_mask){
+}
+void init(void){
+	// Initialize the board clock
+	sysclk_init();
+	
+	// Desativa WatchDog Timer
+	WDT->WDT_MR = WDT_MR_WDDIS;
+		
+	// Inicializa PIO do botao
+	pmc_enable_periph_clk(BUTLOCK_PIO_ID);
+	
+	// configura pino ligado ao botão como entrada com um pull-up.
+	pio_set_input(BUTLOCK_PIO,BUTLOCK_PIO_IDX_MASK,PIO_DEFAULT);
+	pio_pull_up(BUTLOCK_PIO,BUTLOCK_PIO_IDX_MASK,1);
+
+
+}
+
+
 //Defines
 #define MAX_ENTRIES        3
 #define STRING_LENGTH     70
@@ -273,7 +293,7 @@ void draw_mode(t_ciclo cicles[], uint8_t n){
 	sprintf(centrifugacaoTempo,"%d minutos",cicles[n].centrifugacaoTempo);
 	
 	ili9488_draw_string(200, 10, nome);
-	ili9488_draw_string(10,280, enxagueTempo);
+	ili9488_draw_string(10,280, centrifugacaoRPM);
 	ili9488_draw_string(170,280, enxagueQnt);
 	ili9488_draw_string(150,135, centrifugacaoTempo);
 	
@@ -295,7 +315,9 @@ void draw_lines(void){
 }
 
 void draw_strings(){
-	ili9488_draw_string(225, 340,"LOCK");
+	if(locked){
+		ili9488_draw_string(225, 340,"LOCK");
+	}
 }
 
 
@@ -306,6 +328,7 @@ void draw_icons(void){
 	ili9488_draw_pixmap(170,30,next.width,next.width,next.data);
 }
 
+// Botão NEXT MODE
 void draw_button_Next(uint32_t clicked){
 	static uint32_t last_state = 255; // undefined
 	if(clicked == last_state) return;
@@ -332,6 +355,7 @@ void draw_button_lock(uint32_t clicked, button *buttons) {
 	last_state = clicked;
 }
 */
+/*
 
 void draw_button_isDone(uint32_t clicked) {
 	static uint32_t last_state = 255; // undefined
@@ -348,6 +372,7 @@ void draw_button_isDone(uint32_t clicked) {
 	}
 	last_state = clicked;
 }
+*/
 
 
 void callback_power(int i){}
@@ -368,11 +393,12 @@ void update_screen(uint32_t tx, uint32_t ty,button *buttons, t_ciclo *cicles) {
 		}
 	}*/
 	
+	// Ver se o botão next foi clicado
 	if(ty >= buttons[1].axe_y  &&  ty <= buttons[1].axe_y + buttons[1].height ) {
 		if(tx >= buttons[1].axe_x  && tx <= buttons[1].axe_x+ buttons[1].width) {
 			if (count_mode < 4){
 				count_mode = count_mode + 1;
-				nextmode=1;
+				nextmode = 1;
 			}
 			else{count_mode=0;}
 		}
@@ -427,6 +453,8 @@ int main(void)
 {
 	struct mxt_device device; /* Device data container */
 
+	init();
+	
 	/* Initialize the USART configuration struct */
 	const usart_serial_options_t usart_serial_options = {
 		.baudrate     = USART_SERIAL_EXAMPLE_BAUDRATE,
@@ -440,6 +468,7 @@ int main(void)
      //button safety_lock = {.call_back=callback_lock,.axe_x=210,.axe_y=370,.width=100,.height=30,.imagens_icons=NULL};
      //button time_IsDone = {.call_back=callback_time,.axe_x=10,.axe_y=440,.width=100,.height=30,.imagens_icons=NULL};	
 	
+	// Vetores de ciclos e botões
 	t_ciclo cicles[] = {c_rapido, c_centrifuga, c_pesado, c_enxague, c_diario};
 	button buttons[]= {power_button,next_button};	
 		
@@ -456,7 +485,6 @@ int main(void)
 
 	printf("\n\rmaXTouch data USART transmitter\n\r");
 	
-	
 
 	while (true) {
 		/* Check for any pending messages and run message handler if any
@@ -465,12 +493,13 @@ int main(void)
 		if(!(pio_get(BUTLOCK_PIO, PIO_INPUT, BUTLOCK_PIO_IDX_MASK))){
 			count_lock=count_lock+1;
 		}
+		printf("%d",count_lock);
 		if (count_lock == 3){
 			locked = !locked;
 			count_lock = 0;
 		}
 		
-		if (mxt_is_message_pending(&device)) {
+		if (!locked && mxt_is_message_pending(&device)) {
 			mxt_handler(&device,&buttons,&cicles);
 		}
 		if (!started){
