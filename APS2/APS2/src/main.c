@@ -89,7 +89,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <maquina1.h>
+#include "maquina1.h"
 #include "conf_board.h"
 #include "conf_example.h"
 #include "conf_uart_serial.h"
@@ -99,6 +99,31 @@
 #define BUTLOCK_PIO_ID        10
 #define BUTLOCK_PIO_IDX       4u
 #define BUTLOCK_PIO_IDX_MASK  (1u << BUTLOCK_PIO_IDX)
+
+/**
+ * Inicializa ordem do menu
+ * retorna o primeiro ciclo que
+ * deve ser exibido.
+ */
+t_ciclo *initMenuOrder(){
+  c_rapido.previous = &c_enxague;
+  c_rapido.next = &c_diario;
+
+  c_diario.previous = &c_rapido;
+  c_diario.next = &c_pesado;
+
+  c_pesado.previous = &c_diario;
+  c_pesado.next = &c_enxague;
+
+  c_enxague.previous = &c_pesado;
+  c_enxague.next = &c_centrifuga;
+
+  c_centrifuga.previous = &c_enxague;
+  c_centrifuga.next = &c_rapido;
+
+  return(&c_diario);
+}
+
 
 void _pio_set(Pio *p_pio, const uint32_t ul_mask){
 }
@@ -154,9 +179,15 @@ typedef struct{
 int count_mode = 0;
 
 // FLAGS
-volatile Bool locked = false;
-volatile Bool started = false;
-volatile Bool nextmode = false;
+volatile Bool locked; // melhor inicialiazar na main
+volatile Bool started;
+volatile Bool nextmode;
+volatile int tempo;
+volatile int minuto;
+volatile Bool start;
+
+void TC_init(Tc * TC, int ID_TC, int TC_CHANNEL, int freq);
+
 	
 static void configure_lcd(void){
 	/* Initialize display parameter */
@@ -285,17 +316,26 @@ void draw_mode(t_ciclo cicles[], uint8_t n){
 	char enxagueQnt[15];
 	char centrifugacaoRPM[15];
 	char centrifugacaoTempo[15];
+	char centrifugaString[32];
+	char stringEnxague[32];
 	
 	sprintf(nome,"%s",cicles[n].nome);
 	sprintf(enxagueTempo,"%d minutos",cicles[n].enxagueTempo);
 	sprintf(enxagueQnt,"%d enxagues",cicles[n].enxagueQnt);
 	sprintf(centrifugacaoRPM,"%d RPM",cicles[n].centrifugacaoRPM);
 	sprintf(centrifugacaoTempo,"%d minutos",cicles[n].centrifugacaoTempo);
+	sprintf(centrifugaString,"Centrifuga:");
+	sprintf(stringEnxague,"Enxague:");
 	
+
 	ili9488_draw_string(200, 10, nome);
 	ili9488_draw_string(10,280, centrifugacaoRPM);
 	ili9488_draw_string(170,280, enxagueQnt);
-	ili9488_draw_string(150,135, centrifugacaoTempo);
+	ili9488_draw_string(10,380, centrifugacaoTempo);
+	ili9488_draw_string(200,380, enxagueTempo);
+	ili9488_draw_string(10,360, centrifugaString);
+	ili9488_draw_string(200,360, stringEnxague);
+
 	
 	if (cicles[n].heavy == 1){
 		ili9488_draw_string(200, 450, "HEAVY");
@@ -355,7 +395,7 @@ void draw_button_lock(uint32_t clicked, button *buttons) {
 	last_state = clicked;
 }
 */
-/*
+
 
 void draw_button_isDone(uint32_t clicked) {
 	static uint32_t last_state = 255; // undefined
@@ -372,16 +412,76 @@ void draw_button_isDone(uint32_t clicked) {
 	}
 	last_state = clicked;
 }
+
+
+
+void callback_power(void){
+	TC_init(TC0,ID_TC0,0,1);
+}
+void callback_next(void){
+}
+
+void callback_lock(void){
+}
+
+void callback_time(void){
+}
+
+/**
+*  Interrupt handler for TC1 interrupt.
 */
+void TC0_Handler(void){
+	volatile uint32_t ul_dummy;
 
+	/****************************************************************
+	* Devemos indicar ao TC que a interrupção foi satisfeita.
+	******************************************************************/
+	ul_dummy = tc_get_status(TC0, 0);
 
-void callback_power(int i){}
-void callback_next(int i){}
-void callback_lock(int i){}
-void callback_time(int i){}
+	/* Avoid compiler warning */
+	UNUSED(ul_dummy);
+	
+	tempo+=1; //em segundos
+	if (tempo == 1){
+		minuto += 1;
+		tempo = 0;
+	}
+}
 
+/**
+* Configura TimerCounter (TC) para gerar uma interrupcao no canal (ID_TC e TC_CHANNEL)
+* na taxa de especificada em freq.
+*/
+void TC_init(Tc * TC, int ID_TC, int TC_CHANNEL, int freq){
+	uint32_t ul_div;
+	uint32_t ul_tcclks;
+	uint32_t ul_sysclk = sysclk_get_cpu_hz();
 
-void update_screen(uint32_t tx, uint32_t ty,button *buttons, t_ciclo *cicles) {
+	uint32_t channel = 1;
+
+	/* Configura o PMC */
+	/* O TimerCounter é meio confuso
+	o uC possui 3 TCs, cada TC possui 3 canais
+	TC0 : ID_TC0, ID_TC1, ID_TC2
+	TC1 : ID_TC3, ID_TC4, ID_TC5
+	TC2 : ID_TC6, ID_TC7, ID_TC8
+	*/
+	pmc_enable_periph_clk(ID_TC);
+
+	/** Configura o TC para operar em  4Mhz e interrupçcão no RC compare */
+	tc_find_mck_divisor(freq, ul_sysclk, &ul_div, &ul_tcclks, ul_sysclk);
+	tc_init(TC, TC_CHANNEL, ul_tcclks | TC_CMR_CPCTRG);
+	tc_write_rc(TC, TC_CHANNEL, (ul_sysclk / ul_div) / freq);
+
+	/* Configura e ativa interrupçcão no TC canal 0 */
+	/* Interrupção no C */
+	NVIC_EnableIRQ((IRQn_Type) ID_TC);
+	tc_enable_interrupt(TC, TC_CHANNEL, TC_IER_CPCS);
+
+	/* Inicializa o canal 0 do TC */
+	tc_start(TC, TC_CHANNEL);
+}
+void update_screen(uint32_t tx, uint32_t ty,button *buttons, t_ciclo *cicles, uint8_t n){
 	
 	/*if(ty >= buttons[2].axe_y  &&  ty <= buttons[2].axe_y + buttons[2].height ) {
 		if(tx >= buttons[2].axe_x  && tx <= buttons[2].axe_x + buttons[2].width/2) {
@@ -392,6 +492,27 @@ void update_screen(uint32_t tx, uint32_t ty,button *buttons, t_ciclo *cicles) {
 			locked = 0;
 		}
 	}*/
+	
+	
+	//powerButton
+	if(ty >= buttons[0].axe_y  &&  ty <= buttons[0].axe_y + buttons[0].height ){
+		if(tx >= buttons[0].axe_x  && tx <= buttons[0].axe_x+ buttons[0].width) {
+			if(start ==false){
+				start = true;
+				TC_init(TC0,ID_TC0,0,1);
+				char testeBuff[32];
+				sprintf(testeBuff,"teste");
+				cicles
+				ili9488_draw_string(0, 395, testeBuff);
+			}
+			else if(start ==true){
+				start = false;
+				tc_stop(TC0,0);			
+			}
+		}
+	}
+			
+			
 	
 	// Ver se o botão next foi clicado
 	if(ty >= buttons[1].axe_y  &&  ty <= buttons[1].axe_y + buttons[1].height ) {
@@ -473,7 +594,7 @@ int main(void)
      //button time_IsDone = {.call_back=callback_time,.axe_x=10,.axe_y=440,.width=100,.height=30,.imagens_icons=NULL};	
 	
 	// Vetores de ciclos e botões
-	t_ciclo cicles[] = {c_rapido, c_centrifuga, c_pesado, c_enxague, c_diario};
+	t_ciclo cicles[] = {c_diario, c_pesado, c_enxague, c_centrifuga, c_rapido};
 	button buttons[]= {power_button,next_button};	
 		
 		
@@ -489,6 +610,11 @@ int main(void)
 
 	printf("\n\rmaXTouch data USART transmitter\n\r");
 	
+	// FLAGS
+	locked = false; // melhor inicialiazar na main
+	started = false;
+	nextmode = false;
+	start = false;
 
 	while (true) {
 		/* Check for any pending messages and run message handler if any
