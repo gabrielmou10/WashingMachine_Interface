@@ -179,11 +179,12 @@ typedef struct{
 int count_mode = 0;
 
 // FLAGS
+volatile t_ciclo *statusCiclo;
 volatile Bool locked; // melhor inicialiazar na main
 volatile Bool started;
 volatile Bool nextmode;
-volatile int tempo;
-volatile int minuto;
+volatile uint8_t tempo = 0;
+volatile uint8_t minuto = 0;
 volatile Bool start;
 
 void TC_init(Tc * TC, int ID_TC, int TC_CHANNEL, int freq);
@@ -446,6 +447,14 @@ void TC0_Handler(void){
 		minuto += 1;
 		tempo = 0;
 	}
+	if (((statusCiclo->centrifugacaoTempo+statusCiclo->enxagueTempo)-minuto) <= 0){
+		start = 0;
+		minuto = 0;
+		tempo = 0;
+		draw_screen();
+		tc_stop(TC0, 0);
+	}
+	
 }
 
 /**
@@ -481,7 +490,7 @@ void TC_init(Tc * TC, int ID_TC, int TC_CHANNEL, int freq){
 	/* Inicializa o canal 0 do TC */
 	tc_start(TC, TC_CHANNEL);
 }
-void update_screen(uint32_t tx, uint32_t ty,button *buttons, t_ciclo *cicles, uint8_t n){
+void update_screen(uint32_t tx, uint32_t ty,button *buttons, t_ciclo *cicles){
 	
 	/*if(ty >= buttons[2].axe_y  &&  ty <= buttons[2].axe_y + buttons[2].height ) {
 		if(tx >= buttons[2].axe_x  && tx <= buttons[2].axe_x + buttons[2].width/2) {
@@ -502,7 +511,6 @@ void update_screen(uint32_t tx, uint32_t ty,button *buttons, t_ciclo *cicles, ui
 				TC_init(TC0,ID_TC0,0,1);
 				char testeBuff[32];
 				sprintf(testeBuff,"teste");
-				cicles
 				ili9488_draw_string(0, 395, testeBuff);
 			}
 			else if(start ==true){
@@ -577,9 +585,9 @@ void mxt_handler(struct mxt_device *device,button *buttons, t_ciclo *cicles)
 int main(void)
 {
 	struct mxt_device device; /* Device data container */
-
-	init();
 	
+	init();
+	statusCiclo = initMenuOrder();
 	/* Initialize the USART configuration struct */
 	const usart_serial_options_t usart_serial_options = {
 		.baudrate     = USART_SERIAL_EXAMPLE_BAUDRATE,
