@@ -310,8 +310,14 @@ uint32_t convert_axis_system_y(uint32_t touch_x) {
 	return ILI9488_LCD_HEIGHT*touch_x/4096;
 }
 
-void draw_mode(t_ciclo cicles[], uint8_t n){
+void draw_mode(){
 	
+	//Pegar os ciclos
+	
+	char bufferCiclos[32];
+	sprintf(bufferCiclos, statusCiclo);
+	
+	// Cada ciclo no lcd
 	char nome[32];
 	char enxagueTempo[15];
 	char enxagueQnt[15];
@@ -320,30 +326,38 @@ void draw_mode(t_ciclo cicles[], uint8_t n){
 	char centrifugaString[32];
 	char stringEnxague[32];
 	
-	sprintf(nome,"%s",cicles[n].nome);
-	sprintf(enxagueTempo,"%d minutos",cicles[n].enxagueTempo);
-	sprintf(enxagueQnt,"%d enxagues",cicles[n].enxagueQnt);
-	sprintf(centrifugacaoRPM,"%d RPM",cicles[n].centrifugacaoRPM);
-	sprintf(centrifugacaoTempo,"%d minutos",cicles[n].centrifugacaoTempo);
-	sprintf(centrifugaString,"Centrifuga:");
-	sprintf(stringEnxague,"Enxague:");
+	sprintf(bufferCiclos,"%s",statusCiclo->nome);
+	ili9488_draw_string(200, 10, bufferCiclos);
+	
+	sprintf(bufferCiclos,"%d minutos",statusCiclo->enxagueTempo);
+	ili9488_draw_string(200,380, bufferCiclos);
+	
+	sprintf(bufferCiclos,"%d enxagues",statusCiclo->enxagueQnt);
+	ili9488_draw_string(170,280, bufferCiclos);
+	
+	sprintf(bufferCiclos,"%d RPM",statusCiclo->centrifugacaoRPM);
+	ili9488_draw_string(10,280, bufferCiclos);
+	
+	sprintf(bufferCiclos,"%d minutos",statusCiclo->centrifugacaoTempo);
+	ili9488_draw_string(10,380, bufferCiclos);
+	
+	//centrifugaString=printf("%s" ,"Centrifuga:");
+	ili9488_draw_string(10,360, "Centrifuga");
+	
+	//sprintf(bufferCiclos,"Enxague:");
+	//ili9488_draw_string(200,360, stringEnxague);
+	
 	
 
-	ili9488_draw_string(200, 10, nome);
-	ili9488_draw_string(10,280, centrifugacaoRPM);
-	ili9488_draw_string(170,280, enxagueQnt);
-	ili9488_draw_string(10,380, centrifugacaoTempo);
-	ili9488_draw_string(200,380, enxagueTempo);
-	ili9488_draw_string(10,360, centrifugaString);
-	ili9488_draw_string(200,360, stringEnxague);
-
 	
-	if (cicles[n].heavy == 1){
+	if (statusCiclo->heavy == 1){
 		ili9488_draw_string(200, 450, "HEAVY");
+		sprintf(bufferCiclos, "Pesado ligado");
 	}
 	
-	if (cicles[n].bubblesOn == 1){
+	if (statusCiclo->bubblesOn == 1){
 		ili9488_draw_string(200, 420, "BUBBLES ON");
+		sprintf(bufferCiclos,"Bolhas ligadas");
 	}	
 	
 }
@@ -355,6 +369,14 @@ void draw_lines(void){
 	ili9488_draw_filled_rectangle(0,320,320,325);
 }
 
+void fim(){
+	char Final[32];
+	ili9488_set_foreground_color(COLOR_CONVERT(COLOR_WHITE));
+	ili9488_draw_filled_rectangle(210,370,400,500);
+	ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
+	sprintf(Final, "%s %d", "Fim da Lavagem");
+	ili9488_draw_string(10, 420, Final);
+}
 void draw_strings(){
 	if(locked){
 		ili9488_draw_string(225, 340,"LOCK");
@@ -367,6 +389,16 @@ void draw_icons(void){
 	ili9488_draw_pixmap(170,170,valve.width, valve.width, valve.data);
 	ili9488_draw_pixmap(10,170,gear.width, gear.width, gear.data);
 	ili9488_draw_pixmap(170,30,next.width,next.width,next.data);
+}
+
+void timePrint(){
+	ili9488_set_foreground_color(COLOR_CONVERT(COLOR_WHITE));
+	ili9488_draw_filled_rectangle(5,420,150,460);
+	ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
+	char remainingTime[32];
+	int lastTime = (statusCiclo->centrifugacaoTempo+statusCiclo->enxagueTempo)-minuto;
+	sprintf(remainingTime, "%s\n %d\n", "Tempo restante:",lastTime);
+	ili9488_draw_string(10, 420, remainingTime);
 }
 
 // Botão NEXT MODE
@@ -446,12 +478,13 @@ void TC0_Handler(void){
 	if (tempo == 1){
 		minuto += 1;
 		tempo = 0;
+		timePrint();
 	}
 	if (((statusCiclo->centrifugacaoTempo+statusCiclo->enxagueTempo)-minuto) <= 0){
-		start = 0;
+		start = false;
 		minuto = 0;
 		tempo = 0;
-		draw_screen();
+		fim();
 		tc_stop(TC0, 0);
 	}
 	
@@ -490,7 +523,7 @@ void TC_init(Tc * TC, int ID_TC, int TC_CHANNEL, int freq){
 	/* Inicializa o canal 0 do TC */
 	tc_start(TC, TC_CHANNEL);
 }
-void update_screen(uint32_t tx, uint32_t ty,button *buttons, t_ciclo *cicles){
+void update_screen(uint32_t tx, uint32_t ty,button *buttons){
 	
 	/*if(ty >= buttons[2].axe_y  &&  ty <= buttons[2].axe_y + buttons[2].height ) {
 		if(tx >= buttons[2].axe_x  && tx <= buttons[2].axe_x + buttons[2].width/2) {
@@ -509,9 +542,7 @@ void update_screen(uint32_t tx, uint32_t ty,button *buttons, t_ciclo *cicles){
 			if(start ==false){
 				start = true;
 				TC_init(TC0,ID_TC0,0,1);
-				char testeBuff[32];
-				sprintf(testeBuff,"teste");
-				ili9488_draw_string(0, 395, testeBuff);
+				timePrint();
 			}
 			else if(start ==true){
 				start = false;
@@ -526,8 +557,12 @@ void update_screen(uint32_t tx, uint32_t ty,button *buttons, t_ciclo *cicles){
 	if(ty >= buttons[1].axe_y  &&  ty <= buttons[1].axe_y + buttons[1].height ) {
 		if(tx >= buttons[1].axe_x  && tx <= buttons[1].axe_x+ buttons[1].width) {
 			if (count_mode < 4){
+				statusCiclo = statusCiclo -> next;
 				count_mode = count_mode + 1;
 				nextmode = 1;
+				tc_stop(TC0,0);
+				minuto = 0;
+				tempo = 0;
 			}
 			else{count_mode=0;}
 		}
@@ -535,7 +570,7 @@ void update_screen(uint32_t tx, uint32_t ty,button *buttons, t_ciclo *cicles){
 	
 }
 
-void mxt_handler(struct mxt_device *device,button *buttons, t_ciclo *cicles)
+void mxt_handler(struct mxt_device *device,button *buttons)
 {
 	/* USART tx buffer initialized to 0 */
 	char tx_buf[STRING_LENGTH * MAX_ENTRIES] = {0};
@@ -564,7 +599,7 @@ void mxt_handler(struct mxt_device *device,button *buttons, t_ciclo *cicles)
 		
 		int last_status = touch_event.status;
 		if(last_status<60){
-			update_screen(conv_x, conv_y,buttons,cicles);
+			update_screen(conv_x, conv_y,buttons);
 		}				
 		
 
@@ -638,7 +673,7 @@ int main(void)
 		}
 		
 		if (!locked && mxt_is_message_pending(&device)) {
-			mxt_handler(&device,&buttons,&cicles);
+			mxt_handler(&device,&buttons);
 		}
 		if (!started){
 			draw_screen();
