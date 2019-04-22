@@ -124,9 +124,10 @@ t_ciclo *initMenuOrder(){
   return(&c_diario);
 }
 
-
+// Configuração do botão externo
 void _pio_set(Pio *p_pio, const uint32_t ul_mask){
 }
+
 void init(void){
 	// Initialize the board clock
 	sysclk_init();
@@ -138,8 +139,11 @@ void init(void){
 	pmc_enable_periph_clk(BUTLOCK_PIO_ID);
 	
 	// configura pino ligado ao botão como entrada com um pull-up.
-	pio_set_input(BUTLOCK_PIO,BUTLOCK_PIO_IDX_MASK,PIO_DEFAULT);
-	pio_pull_up(BUTLOCK_PIO,BUTLOCK_PIO_IDX_MASK,1);
+	pio_configure(BUTLOCK_PIO, PIO_INPUT,BUTLOCK_PIO_IDX_MASK, PIO_PULLUP);
+	pio_enable_interrupt(BUTLOCK_PIO, BUTLOCK_PIO_IDX_MASK);
+	NVIC_EnableIRQ(BUTLOCK_PIO_ID);
+	//pio_set_input(BUTLOCK_PIO,BUTLOCK_PIO_IDX_MASK,PIO_DEFAULT);
+	//pio_pull_up(BUTLOCK_PIO,BUTLOCK_PIO_IDX_MASK,1);
 
 
 }
@@ -164,6 +168,11 @@ typedef struct {
 #include "icones/valve.h"
 #include "icones/gear.h"
 #include "icones/next.h"	
+#include "icones/Rapido.h"
+#include "icones/Diario.h"
+#include "icones/enxague.h"
+#include "icones/Pesado.h"
+#include "icones/Centrifugacao.h"
 
 //Struct Buttons
 typedef struct{
@@ -378,9 +387,7 @@ void fim(){
 	ili9488_draw_string(10, 420, Final);
 }
 void draw_strings(){
-	if(locked){
-		ili9488_draw_string(225, 340,"LOCK");
-	}
+	ili9488_draw_string(225, 340,"LOCK");
 }
 
 
@@ -543,6 +550,7 @@ void update_screen(uint32_t tx, uint32_t ty,button *buttons){
 				start = true;
 				TC_init(TC0,ID_TC0,0,1);
 				timePrint();
+				locked = 1;
 			}
 			else if(start ==true){
 				start = false;
@@ -550,6 +558,9 @@ void update_screen(uint32_t tx, uint32_t ty,button *buttons){
 			}
 		}
 	}
+	if(locked){
+		ili9488_draw_string(225, 340,"LOCK");
+	}	
 			
 			
 	
@@ -658,20 +669,21 @@ int main(void)
 	started = false;
 	nextmode = false;
 	start = false;
-
+	uint32_t count_lock = 0;
+	
 	while (true) {
 		/* Check for any pending messages and run message handler if any
 		 * message is found in the queue */
-		int count_lock = 0;
 		if(!(pio_get(BUTLOCK_PIO, PIO_INPUT, BUTLOCK_PIO_IDX_MASK))){
 			count_lock=count_lock+1;
 		}
-		printf("%d",count_lock);
+		printf("%d \n",count_lock);
+		printf("LOCEKD: %d \n",locked);
+		delay_ms(60);
 		if (count_lock == 3){
 			locked = !locked;
 			count_lock = 0;
 		}
-		
 		if (!locked && mxt_is_message_pending(&device)) {
 			mxt_handler(&device,&buttons);
 		}
@@ -679,16 +691,18 @@ int main(void)
 			draw_screen();
 			draw_lines();
 			//draw_button_lock(1,&buttons);
-			draw_strings();
 			draw_icons();
 			draw_mode(cicles,count_mode);
 			started = 1;
+		}
+		if (locked){
+			draw_strings();
 		}
 		if (nextmode){
 			draw_screen();
 			draw_lines();
 			//draw_button_lock(1,&buttons);
-			draw_strings();
+			//draw_strings();
 			draw_icons();		
 			draw_mode(cicles,count_mode);
 			nextmode = 0;
