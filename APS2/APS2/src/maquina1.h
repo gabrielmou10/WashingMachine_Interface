@@ -43,7 +43,7 @@ t_ciclo c_pesado = {.nome = "Pesado",
                   };
 
 t_ciclo c_enxague = {.nome = "Enxague",
-                     .enxagueTempo = 1,
+                     .enxagueTempo = 10,
                      .enxagueQnt = 1,
                      .centrifugacaoRPM = 0,
                      .centrifugacaoTempo = 0,
