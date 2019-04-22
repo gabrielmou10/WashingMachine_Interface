@@ -124,8 +124,14 @@ t_ciclo *initMenuOrder(){
   return(&c_diario);
 }
 
+/*
 // Configuração do botão externo
 void _pio_set(Pio *p_pio, const uint32_t ul_mask){
+}*/
+volatile Bool but_flag = false;
+void but_callback(void)
+{
+	but_flag = true;
 }
 
 void init(void){
@@ -140,8 +146,10 @@ void init(void){
 	
 	// configura pino ligado ao botão como entrada com um pull-up.
 	pio_configure(BUTLOCK_PIO, PIO_INPUT,BUTLOCK_PIO_IDX_MASK, PIO_PULLUP);
+    pio_handler_set(BUTLOCK_PIO,BUTLOCK_PIO_ID,BUTLOCK_PIO_IDX_MASK,PIO_IT_RISE_EDGE,but_callback);
 	pio_enable_interrupt(BUTLOCK_PIO, BUTLOCK_PIO_IDX_MASK);
 	NVIC_EnableIRQ(BUTLOCK_PIO_ID);
+	NVIC_SetPriority(BUTLOCK_PIO_ID, 4); // Prioridade 4
 	//pio_set_input(BUTLOCK_PIO,BUTLOCK_PIO_IDX_MASK,PIO_DEFAULT);
 	//pio_pull_up(BUTLOCK_PIO,BUTLOCK_PIO_IDX_MASK,1);
 
@@ -632,19 +640,22 @@ int main(void)
 	while (true) {
 		/* Check for any pending messages and run message handler if any
 		 * message is found in the queue */
-		if(!(pio_get(BUTLOCK_PIO, PIO_INPUT, BUTLOCK_PIO_IDX_MASK))){
-			count_lock=count_lock+1;
+		if(but_flag){
+			count_lock = count_lock+1;
+			but_flag = false;
 		}
-		printf("%d \n",count_lock);
-		printf("LOCEKD: %d \n",locked);
+		
+		printf("countlock: %d \n",count_lock);
+		printf("LOCKED: %d\n",locked);
 		delay_ms(60);
-		if (count_lock >= 3){
+		if (count_lock == 5){
 			locked = !locked;
 			count_lock = 0;
 			turnlock = 1;
 		}
 		if (!locked && mxt_is_message_pending(&device)) {
 			mxt_handler(&device,&buttons);
+			but_flag = false;
 		}
 		// Reescrevendo a tela inicial
 		if (!started){
@@ -671,7 +682,9 @@ int main(void)
 			ili9488_draw_string(15, 140,"UNLOCK");
 			draw_icons(statusCiclo);		
 			draw_mode(cicles,count_mode);
+			locked = 0;
 			nextmode = 0;
+			turnlock = 0;
 		}	
 
 	}
