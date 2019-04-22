@@ -350,15 +350,11 @@ void draw_mode(){
 	sprintf(bufferCiclos,"%d minutos",statusCiclo->centrifugacaoTempo);
 	ili9488_draw_string(10,380, bufferCiclos);
 	
-	//centrifugaString=printf("%s" ,"Centrifuga:");
 	ili9488_draw_string(10,360, "Centrifuga");
 	
-	//sprintf(bufferCiclos,"Enxague:");
-	//ili9488_draw_string(200,360, stringEnxague);
-	
+	ili9488_draw_string(200,360, "Enxague");
 	
 
-	
 	if (statusCiclo->heavy == 1){
 		ili9488_draw_string(200, 450, "HEAVY");
 		sprintf(bufferCiclos, "Pesado ligado");
@@ -391,11 +387,28 @@ void draw_strings(){
 }
 
 
-void draw_icons(void){
+void draw_icons(t_ciclo *statusCiclo){
 	ili9488_draw_pixmap(10,10,powerbutton.width, powerbutton.width, powerbutton.data);
 	ili9488_draw_pixmap(170,170,valve.width, valve.width, valve.data);
 	ili9488_draw_pixmap(10,170,gear.width, gear.width, gear.data);
 	ili9488_draw_pixmap(170,30,next.width,next.width,next.data);
+	
+	if((statusCiclo->enxagueQnt + statusCiclo ->enxagueTempo) == 8 ){
+		ili9488_draw_pixmap(125,0,Rapido.width, Rapido.width, Rapido.data);
+	}
+	if(statusCiclo->enxagueQnt + statusCiclo->enxagueTempo == 17){
+		ili9488_draw_pixmap(125,0,Diario.width, Diario.width, Diario.data);
+	}
+	if(statusCiclo->enxagueQnt + statusCiclo->enxagueTempo == 13){
+		ili9488_draw_pixmap(125,0,Pesado.width, Pesado.width, Pesado.data);
+	}
+	if(statusCiclo->enxagueQnt + statusCiclo->enxagueTempo == 11){
+		ili9488_draw_pixmap(125,0,Enxague.width, Enxague.width, Enxague.data);
+	}
+	if(statusCiclo->enxagueQnt + statusCiclo ->enxagueTempo == 0){
+		ili9488_draw_pixmap(125,0,Centrifugacao.width, Centrifugacao.width, Centrifugacao.data);
+	}
+	
 }
 
 void timePrint(){
@@ -418,42 +431,6 @@ void draw_button_Next(uint32_t clicked){
 	}else{}	
 	last_state = clicked;
 }
-
-/*
-void draw_button_lock(uint32_t clicked, button *buttons) {
-	static uint32_t last_state = 255; // undefined
-	if(clicked == last_state) return;
-	
-	ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
-	ili9488_draw_filled_rectangle(buttons[2].axe_x,buttons[2].axe_y,buttons[2].axe_x + buttons[2].width,buttons[2].axe_y + buttons[2].height);
-	if(clicked) {
-		ili9488_set_foreground_color(COLOR_CONVERT(COLOR_TOMATO));
-		ili9488_draw_filled_rectangle(buttons[2].axe_x,buttons[2].axe_y,buttons[2].axe_x + buttons[2].width/2,buttons[2].axe_y + buttons[2].height);
-		} else {
-		ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GREEN));
-		ili9488_draw_filled_rectangle(buttons[2].axe_x,buttons[2].axe_y,buttons[2].axe_x + buttons[2].width,buttons[2].axe_y + buttons[2].height);
-	}
-	last_state = clicked;
-}
-*/
-
-
-void draw_button_isDone(uint32_t clicked) {
-	static uint32_t last_state = 255; // undefined
-	if(clicked == last_state) return;
-	
-	ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
-	ili9488_draw_filled_rectangle(10,440,110,470);
-	if(clicked) {
-		ili9488_set_foreground_color(COLOR_CONVERT(COLOR_TOMATO));
-		ili9488_draw_filled_rectangle(10,440,60,470);
-		} else {
-		ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GREEN));
-		ili9488_draw_filled_rectangle(60,440,110,470);
-	}
-	last_state = clicked;
-}
-
 
 
 void callback_power(void){
@@ -673,7 +650,7 @@ int main(void)
 		if (!started){
 			draw_screen();
 			draw_lines();
-			draw_icons();
+			draw_icons(statusCiclo);
 			if (locked){
 				draw_strings();
 			}
@@ -692,7 +669,7 @@ int main(void)
 			draw_screen();
 			draw_lines();
 			ili9488_draw_string(15, 140,"UNLOCK");
-			draw_icons();		
+			draw_icons(statusCiclo);		
 			draw_mode(cicles,count_mode);
 			nextmode = 0;
 		}	
