@@ -176,7 +176,6 @@ typedef struct {
 
 //Struct Buttons
 typedef struct{
-	void (*call_back)(int);
 	uint32_t axe_x;
 	uint32_t axe_y;
 	uint32_t width;
@@ -192,9 +191,10 @@ volatile t_ciclo *statusCiclo;
 volatile Bool locked; // melhor inicialiazar na main
 volatile Bool started;
 volatile Bool nextmode;
-volatile uint8_t tempo = 0;
+volatile uint8_t tempo ;
 volatile uint8_t minuto = 0;
 volatile Bool start;
+volatile Bool turnlock = 0;
 
 void TC_init(Tc * TC, int ID_TC, int TC_CHANNEL, int freq);
 
@@ -381,13 +381,13 @@ void draw_lines(void){
 void fim(){
 	char Final[32];
 	ili9488_set_foreground_color(COLOR_CONVERT(COLOR_WHITE));
-	ili9488_draw_filled_rectangle(210,370,400,500);
+	ili9488_draw_filled_rectangle(10,420,200,450);
 	ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
-	sprintf(Final, "%s %d", "Fim da Lavagem");
-	ili9488_draw_string(10, 420, Final);
+	sprintf(Final, "%s", "Fim da Lavagem");
+	ili9488_draw_string(10, 450, Final);
 }
 void draw_strings(){
-	ili9488_draw_string(225, 340,"LOCK");
+	ili9488_draw_string(15, 140,"LOCK");
 }
 
 
@@ -403,8 +403,9 @@ void timePrint(){
 	ili9488_draw_filled_rectangle(5,420,150,460);
 	ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
 	char remainingTime[32];
-	int lastTime = (statusCiclo->centrifugacaoTempo+statusCiclo->enxagueTempo)-minuto;
-	sprintf(remainingTime, "%s\n %d\n", "Tempo restante:",lastTime);
+	int lastTime = (statusCiclo->centrifugacaoTempo+statusCiclo->enxagueTempo)-minuto - 1;
+	int secondsremaining = 60 - tempo;
+	sprintf(remainingTime, "%s\n %d %d", "Tempo restante:",lastTime,secondsremaining);
 	ili9488_draw_string(10, 420, remainingTime);
 }
 
@@ -458,14 +459,7 @@ void draw_button_isDone(uint32_t clicked) {
 void callback_power(void){
 	TC_init(TC0,ID_TC0,0,1);
 }
-void callback_next(void){
-}
 
-void callback_lock(void){
-}
-
-void callback_time(void){
-}
 
 /**
 *  Interrupt handler for TC1 interrupt.
@@ -482,12 +476,12 @@ void TC0_Handler(void){
 	UNUSED(ul_dummy);
 	
 	tempo+=1; //em segundos
-	if (tempo == 1){
+	if (tempo == 60){
 		minuto += 1;
 		tempo = 0;
-		timePrint();
 	}
-	if (((statusCiclo->centrifugacaoTempo+statusCiclo->enxagueTempo)-minuto) <= 0){
+	timePrint();
+	if (((statusCiclo->centrifugacaoTempo+statusCiclo->enxagueTempo)-minuto) <= 0 && tempo==0){
 		start = false;
 		minuto = 0;
 		tempo = 0;
@@ -531,18 +525,7 @@ void TC_init(Tc * TC, int ID_TC, int TC_CHANNEL, int freq){
 	tc_start(TC, TC_CHANNEL);
 }
 void update_screen(uint32_t tx, uint32_t ty,button *buttons){
-	
-	/*if(ty >= buttons[2].axe_y  &&  ty <= buttons[2].axe_y + buttons[2].height ) {
-		if(tx >= buttons[2].axe_x  && tx <= buttons[2].axe_x + buttons[2].width/2) {
-			draw_button_lock(1,&buttons);
-			locked = 1;
-			} else if(tx > buttons[2].axe_x  && tx < buttons[2].axe_x + buttons[2].width) {
-			draw_button_lock(0,&buttons);
-			locked = 0;
-		}
-	}*/
-	
-	
+		
 	//powerButton
 	if(ty >= buttons[0].axe_y  &&  ty <= buttons[0].axe_y + buttons[0].height ){
 		if(tx >= buttons[0].axe_x  && tx <= buttons[0].axe_x+ buttons[0].width) {
@@ -551,6 +534,7 @@ void update_screen(uint32_t tx, uint32_t ty,button *buttons){
 				TC_init(TC0,ID_TC0,0,1);
 				timePrint();
 				locked = 1;
+				turnlock=1;
 			}
 			else if(start ==true){
 				start = false;
@@ -558,12 +542,8 @@ void update_screen(uint32_t tx, uint32_t ty,button *buttons){
 			}
 		}
 	}
-	if(locked){
-		ili9488_draw_string(225, 340,"LOCK");
-	}	
 			
-			
-	
+		
 	// Ver se o botão next foi clicado
 	if(ty >= buttons[1].axe_y  &&  ty <= buttons[1].axe_y + buttons[1].height ) {
 		if(tx >= buttons[1].axe_x  && tx <= buttons[1].axe_x+ buttons[1].width) {
@@ -642,8 +622,8 @@ int main(void)
 		.stopbits     = USART_SERIAL_STOP_BIT
 	};
 	
-     button power_button = {.call_back=callback_power,.axe_x=10,.axe_y=10, .width=powerbutton.width,.height=powerbutton.height, .imagens_icons=powerbutton.data};
-     button next_button  = {.call_back=callback_next,.axe_x=170,.axe_y=30,.width=next.width,.height=next.height,.imagens_icons = next.data};
+     button power_button = {.axe_x=10,.axe_y=10, .width=powerbutton.width,.height=powerbutton.height, .imagens_icons=powerbutton.data};
+     button next_button  = {.axe_x=170,.axe_y=30,.width=next.width,.height=next.height,.imagens_icons = next.data};
      //button safety_lock = {.call_back=callback_lock,.axe_x=210,.axe_y=370,.width=100,.height=30,.imagens_icons=NULL};
      //button time_IsDone = {.call_back=callback_time,.axe_x=10,.axe_y=440,.width=100,.height=30,.imagens_icons=NULL};	
 	
@@ -669,8 +649,9 @@ int main(void)
 	started = false;
 	nextmode = false;
 	start = false;
+	turnlock = false;
 	uint32_t count_lock = 0;
-	
+
 	while (true) {
 		/* Check for any pending messages and run message handler if any
 		 * message is found in the queue */
@@ -680,29 +661,37 @@ int main(void)
 		printf("%d \n",count_lock);
 		printf("LOCEKD: %d \n",locked);
 		delay_ms(60);
-		if (count_lock == 3){
+		if (count_lock >= 3){
 			locked = !locked;
 			count_lock = 0;
+			turnlock = 1;
 		}
 		if (!locked && mxt_is_message_pending(&device)) {
 			mxt_handler(&device,&buttons);
 		}
+		// Reescrevendo a tela inicial
 		if (!started){
 			draw_screen();
 			draw_lines();
-			//draw_button_lock(1,&buttons);
 			draw_icons();
+			if (locked){
+				draw_strings();
+			}
+			else{
+				ili9488_draw_string(15, 140,"UNLOCK");}
 			draw_mode(cicles,count_mode);
 			started = 1;
 		}
-		if (locked){
-			draw_strings();
+		// Mudança de estado de lock para unlock (vice-versa)
+		if (turnlock){
+			started = 0;
+			turnlock = 0;
 		}
+		// Mudança de modo
 		if (nextmode){
 			draw_screen();
 			draw_lines();
-			//draw_button_lock(1,&buttons);
-			//draw_strings();
+			ili9488_draw_string(15, 140,"UNLOCK");
 			draw_icons();		
 			draw_mode(cicles,count_mode);
 			nextmode = 0;
