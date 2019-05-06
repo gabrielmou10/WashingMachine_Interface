@@ -185,8 +185,8 @@ src/main.d src/main.o: ../src/main.c ../src/asf.h \
  ../src/maquina1.h ../src/config/conf_board.h \
  ../src/config/conf_example.h ../src/icones/powerbutton.h \
  ../src/icones/valve.h ../src/icones/gear.h ../src/icones/next.h \
- ../src/icones/Rapido.h ../src/icones/Diario.h ../src/icones/enxague.h \
- ../src/icones/Pesado.h ../src/icones/Centrifugacao.h
+ ../src/icones/rapido.h ../src/icones/diario.h ../src/icones/enxague.h \
+ ../src/icones/pesado.h ../src/icones/centrifugacao.h
 
 ../src/asf.h:
 
@@ -586,12 +586,12 @@ c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-no
 
 ../src/icones/next.h:
 
-../src/icones/Rapido.h:
+../src/icones/rapido.h:
 
-../src/icones/Diario.h:
+../src/icones/diario.h:
 
 ../src/icones/enxague.h:
 
-../src/icones/Pesado.h:
+../src/icones/pesado.h:
 
-../src/icones/Centrifugacao.h:
+../src/icones/centrifugacao.h:

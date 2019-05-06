@@ -691,22 +691,43 @@
     <Folder Include="src\icones\" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="src\asf.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="src\ASF\sam\drivers\tc\tc.c">
       <SubType>compile</SubType>
     </Compile>
     <None Include="src\ASF\sam\drivers\tc\tc.h">
       <SubType>compile</SubType>
     </None>
+    <Compile Include="src\icones\centrifugacao.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\icones\diario.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\icones\enxague.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="src\icones\gear.h">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="src\icones\motorGrande.h">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="src\icones\next.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="src\icones\Onpower.h">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="src\icones\pesado.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="src\icones\powerbutton.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\icones\rapido.h">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="src\icones\valve.h">
@@ -718,9 +739,6 @@
     <Compile Include="src\maquina1.h">
       <SubType>compile</SubType>
     </Compile>
-    <None Include="src\asf.h">
-      <SubType>compile</SubType>
-    </None>
     <None Include="src\config\conf_uart_serial.h">
       <SubType>compile</SubType>
     </None>

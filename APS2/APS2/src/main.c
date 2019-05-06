@@ -94,41 +94,80 @@
 #include "conf_example.h"
 #include "conf_uart_serial.h"
 
+
 //PA4 - BOTAO LOCK
 #define BUTLOCK_PIO         PIOA
 #define BUTLOCK_PIO_ID        10
 #define BUTLOCK_PIO_IDX       4u
 #define BUTLOCK_PIO_IDX_MASK  (1u << BUTLOCK_PIO_IDX)
 
-/**
- * Inicializa ordem do menu
- * retorna o primeiro ciclo que
- * deve ser exibido.
- */
+//Defines
+#define MAX_ENTRIES        3
+#define STRING_LENGTH     70
+#define USART_TX_MAX_LENGTH     0xff
+struct ili9488_opt_t g_ili9488_display_opt;
+
+//Struct Icons
+typedef struct {
+	const uint8_t *data;
+	uint16_t width;
+	uint16_t height;
+	uint8_t dataSize;
+} tImage;
+
+//Struct Buttons
+typedef struct{
+	uint32_t axe_x;
+	uint32_t axe_y;
+	uint32_t width;
+	uint32_t height;
+	ili9488_color_t *imagens_icons;
+} button;
+
+// Icons
+#include "icones/powerbutton.h"
+#include "icones/valve.h"
+#include "icones/gear.h"
+#include "icones/next.h"
+#include "icones/rapido.h"
+#include "icones/diario.h"
+#include "icones/enxague.h"
+#include "icones/pesado.h"
+#include "icones/centrifugacao.h"
+
+// MODO ATUAL
+int count_mode = 0;
+
+// FLAGS
+volatile t_ciclo *statusCiclo;
+volatile Bool locked; // melhor inicialiazar na main
+volatile Bool started;
+volatile Bool nextmode;
+volatile uint8_t tempo ;
+volatile uint8_t minuto = 0;
+volatile Bool start;
+volatile Bool turnlock = 0;
+volatile Bool but_flag = false;
+
 t_ciclo *initMenuOrder(){
-  c_rapido.previous = &c_enxague;
-  c_rapido.next = &c_diario;
+	c_rapido.previous = &c_enxague;
+	c_rapido.next = &c_diario;
 
-  c_diario.previous = &c_rapido;
-  c_diario.next = &c_pesado;
+	c_diario.previous = &c_rapido;
+	c_diario.next = &c_pesado;
 
-  c_pesado.previous = &c_diario;
-  c_pesado.next = &c_enxague;
+	c_pesado.previous = &c_diario;
+	c_pesado.next = &c_enxague;
 
-  c_enxague.previous = &c_pesado;
-  c_enxague.next = &c_centrifuga;
+	c_enxague.previous = &c_pesado;
+	c_enxague.next = &c_centrifuga;
 
-  c_centrifuga.previous = &c_enxague;
-  c_centrifuga.next = &c_rapido;
+	c_centrifuga.previous = &c_enxague;
+	c_centrifuga.next = &c_rapido;
 
-  return(&c_diario);
+	return(&c_diario);
 }
 
-/*
-// Configuração do botão externo
-void _pio_set(Pio *p_pio, const uint32_t ul_mask){
-}*/
-volatile Bool but_flag = false;
 void but_callback(void)
 {
 	but_flag = true;
@@ -156,53 +195,6 @@ void init(void){
 
 }
 
-
-//Defines
-#define MAX_ENTRIES        3
-#define STRING_LENGTH     70
-#define USART_TX_MAX_LENGTH     0xff
-struct ili9488_opt_t g_ili9488_display_opt;
-
-//Struct Icons
-typedef struct {
-	    const uint8_t *data;
-	    uint16_t width;
-	    uint16_t height;
-	    uint8_t dataSize;
-    } tImage;
-
-// Icons
-#include "icones/powerbutton.h"
-#include "icones/valve.h"
-#include "icones/gear.h"
-#include "icones/next.h"	
-#include "icones/Rapido.h"
-#include "icones/Diario.h"
-#include "icones/enxague.h"
-#include "icones/Pesado.h"
-#include "icones/Centrifugacao.h"
-
-//Struct Buttons
-typedef struct{
-	uint32_t axe_x;
-	uint32_t axe_y;
-	uint32_t width;
-	uint32_t height;
-	ili9488_color_t *imagens_icons;
-} button;
-
-// MODO ATUAL
-int count_mode = 0;
-
-// FLAGS
-volatile t_ciclo *statusCiclo;
-volatile Bool locked; // melhor inicialiazar na main
-volatile Bool started;
-volatile Bool nextmode;
-volatile uint8_t tempo ;
-volatile uint8_t minuto = 0;
-volatile Bool start;
-volatile Bool turnlock = 0;
 
 void TC_init(Tc * TC, int ID_TC, int TC_CHANNEL, int freq);
 
@@ -334,14 +326,6 @@ void draw_mode(){
 	char bufferCiclos[32];
 	sprintf(bufferCiclos, statusCiclo);
 	
-	// Cada ciclo no lcd
-	char nome[32];
-	char enxagueTempo[15];
-	char enxagueQnt[15];
-	char centrifugacaoRPM[15];
-	char centrifugacaoTempo[15];
-	char centrifugaString[32];
-	char stringEnxague[32];
 	
 	sprintf(bufferCiclos,"%s",statusCiclo->nome);
 	ili9488_draw_string(200, 10, bufferCiclos);
@@ -394,26 +378,25 @@ void draw_strings(){
 	ili9488_draw_string(15, 140,"LOCK");
 }
 
-
 void draw_icons(t_ciclo *statusCiclo){
 	ili9488_draw_pixmap(10,10,powerbutton.width, powerbutton.width, powerbutton.data);
 	ili9488_draw_pixmap(170,170,valve.width, valve.width, valve.data);
 	ili9488_draw_pixmap(10,170,gear.width, gear.width, gear.data);
 	ili9488_draw_pixmap(170,30,next.width,next.width,next.data);
 	
-	if((statusCiclo->enxagueQnt + statusCiclo ->enxagueTempo) == 8 ){
+	if(statusCiclo == &c_rapido){
 		ili9488_draw_pixmap(125,0,Rapido.width, Rapido.width, Rapido.data);
 	}
-	if(statusCiclo->enxagueQnt + statusCiclo->enxagueTempo == 17){
-		ili9488_draw_pixmap(125,0,Diario.width, Diario.width, Diario.data);
+	if(statusCiclo == &c_diario){
+		ili9488_draw_pixmap(125,0,diario.width, diario.width, diario.data);
 	}
-	if(statusCiclo->enxagueQnt + statusCiclo->enxagueTempo == 13){
+	if(statusCiclo == &c_pesado){
 		ili9488_draw_pixmap(125,0,Pesado.width, Pesado.width, Pesado.data);
 	}
-	if(statusCiclo->enxagueQnt + statusCiclo->enxagueTempo == 11){
+	if(statusCiclo == &c_enxague){
 		ili9488_draw_pixmap(125,0,Enxague.width, Enxague.width, Enxague.data);
 	}
-	if(statusCiclo->enxagueQnt + statusCiclo ->enxagueTempo == 0){
+	if(statusCiclo == &c_centrifuga){
 		ili9488_draw_pixmap(125,0,Centrifugacao.width, Centrifugacao.width, Centrifugacao.data);
 	}
 	
@@ -609,9 +592,7 @@ int main(void)
 	
      button power_button = {.axe_x=10,.axe_y=10, .width=powerbutton.width,.height=powerbutton.height, .imagens_icons=powerbutton.data};
      button next_button  = {.axe_x=170,.axe_y=30,.width=next.width,.height=next.height,.imagens_icons = next.data};
-     //button safety_lock = {.call_back=callback_lock,.axe_x=210,.axe_y=370,.width=100,.height=30,.imagens_icons=NULL};
-     //button time_IsDone = {.call_back=callback_time,.axe_x=10,.axe_y=440,.width=100,.height=30,.imagens_icons=NULL};	
-	
+   
 	// Vetores de ciclos e botões
 	t_ciclo cicles[] = {c_diario, c_pesado, c_enxague, c_centrifuga, c_rapido};
 	button buttons[]= {power_button,next_button};	
